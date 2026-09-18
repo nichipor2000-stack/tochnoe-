@@ -489,7 +489,7 @@
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
-    <h2>👥 Люди</h2>
+    <h2>👥 Меню</h2>
     <button class="sidebar-close" onclick="closeSidebar()">✕</button>
   </div>
   <div class="sidebar-body" id="sidebar-body"></div>
@@ -767,7 +767,7 @@ function scanPhoto(event, targetId) {
   if (!file) return;
 
   const statusEl = document.getElementById(targetId);
-  statusEl.innerHTML = '<div class="card info" style="margin-top:12px;">⏳ Распознаю штрих-код...</div>';
+  statusEl.innerHTML = '<div class="card info" style="margin-top:12px;">⏳ Загружаю фото в полном качестве...</div>';
 
   if (!document.getElementById('photo-temp')) {
     const div = document.createElement('div');
@@ -778,48 +778,70 @@ function scanPhoto(event, targetId) {
 
   const tempScanner = new Html5Qrcode("photo-temp");
 
-  tempScanner.scanFile(file, true)
-    .then(decodedText => {
-      const code = decodedText.toUpperCase();
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      if (targetId === 'scan-result') {
-        // В режиме сканера — ищем в базе
-        const db = loadDB();
-        const p = db[code];
-        if (p) {
-          statusEl.innerHTML = `<div class="card found">
-            <h3>✅ ${escapeHtml(code)}</h3>
-            <p><span class="label">Заказчик</span>${escapeHtml(p.person || '—')}</p>
-            <p><span class="label">Вес</span>${escapeHtml(p.weight || '—')} кг</p>
-            <p><span class="label">Содержимое</span>${escapeHtml(p.desc || '—')}</p>
-          </div>`;
-        } else {
-          statusEl.innerHTML = `<div class="card notfound">
-            <h3>❓ ${escapeHtml(code)}</h3>
-            <p>Не найдено в базе.</p>
-            <button class="success" style="margin-top:12px;"
-              onclick="prefillAdd('${escapeAttr(code)}')">➕ Добавить</button>
-          </div>`;
-        }
-      } else {
-        // В режиме добавления — подставляем в поле
-        document.getElementById('in-track').value = code;
-        statusEl.innerHTML = `<div class="card found" style="margin-top:12px;">
-          <h3>✅ Распознано</h3>
-          <p style="font-family:monospace;font-size:16px;font-weight:bold;">${escapeHtml(code)}</p>
-        </div>`;
-      }
-      event.target.value = '';
-      tempScanner.clear();
-    })
-    .catch(err => {
-      statusEl.innerHTML = `<div class="card notfound" style="margin-top:12px;">
-        <h3>❌ Не удалось</h3>
-        <p>Штрих-код не найден. Проверьте качество фото.</p>
+      canvas.toBlob(function(blob) {
+        const newFile = new File([blob], 'photo.png', { type: 'image/png' });
+        
+        tempScanner.scanFile(newFile, false)
+          .then(decodedText => {
+            handleScanResult(decodedText, targetId, statusEl);
+            event.target.value = '';
+            tempScanner.clear();
+          })
+          .catch(err => {
+            statusEl.innerHTML = `<div class="card notfound" style="margin-top:12px;">
+              <h3>❌ Не удалось распознать</h3>
+              <p>Попробуйте сфотографировать ближе и без бликов.</p>
+            </div>`;
+            event.target.value = '';
+            tempScanner.clear();
+          });
+      }, 'image/png', 1.0);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleScanResult(decodedText, targetId, statusEl) {
+  const code = decodedText.toUpperCase();
+
+  if (targetId === 'scan-result') {
+    const db = loadDB();
+    const p = db[code];
+    if (p) {
+      statusEl.innerHTML = `<div class="card found">
+        <h3>✅ ${escapeHtml(code)}</h3>
+        <p><span class="label">Заказчик</span>${escapeHtml(p.person || '—')}</p>
+        <p><span class="label">Вес</span>${escapeHtml(p.weight || '—')} кг</p>
+        <p><span class="label">Содержимое</span>${escapeHtml(p.desc || '—')}</p>
       </div>`;
-      event.target.value = '';
-      tempScanner.clear();
-    });
+    } else {
+      statusEl.innerHTML = `<div class="card notfound">
+        <h3>❓ ${escapeHtml(code)}</h3>
+        <p>Не найдено в базе.</p>
+        <button class="success" style="margin-top:12px;"
+          onclick="prefillAdd('${escapeAttr(code)}')">➕ Добавить</button>
+      </div>`;
+    }
+  } else {
+    document.getElementById('in-track').value = code;
+    statusEl.innerHTML = `<div class="card found" style="margin-top:12px;">
+      <h3>✅ Распознано</h3>
+      <p style="font-family:monospace;font-size:16px;font-weight:bold;">${escapeHtml(code)}</p>
+    </div>`;
+  }
 }
 
 // ============ ГЕНЕРАЦИЯ ШТРИХ-КОДА ============
