@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1e40af">
+<title>📦 Сканер посылок</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1e40af;
+    --primary-light: #dbeafe;
+    --success: #16a34a;
+    --success-light: #dcfce7;
+    --danger: #dc2626;
+    --danger-light: #fee2e2;
+    --warning: #ea580c;
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --text: #0f172a;
+    --text-secondary: #64748b;
+    --border: #e2e8f0;
+    --shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 60px;
+    overflow-x: hidden;
+  }
+
+  /* ============ ШАПКА ============ */
+  .app-header {
+    background: linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
+    color: white;
+    padding: 16px 20px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+  }
+  .menu-btn {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .menu-btn:active { background: rgba(255,255,255,0.3); }
+  .header-title { flex: 1; }
+  .header-title h1 { font-size: 18px; font-weight: 700; }
+  .header-title p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+  /* ============ БОКОВОЕ МЕНЮ ============ */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+    backdrop-filter: blur(2px);
+  }
+  .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100vh;
+    background: var(--card);
+    z-index: 201;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 4px 0 24px rgba(15, 23, 42, 0.15);
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  .sidebar-header {
+    padding: 20px;
+    background: linear-gradient(135deg, #1e40af, #2563eb);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sidebar-header h2 { font-size: 16px; font-weight: 700; }
+  .sidebar-close {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .person-item {
+    padding: 14px 16px;
+    border-radius: 12px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.15s;
+    border: 1.5px solid transparent;
+  }
+  .person-item:hover { background: var(--primary-light); }
+  .person-item.active {
+    background: var(--primary-light);
+    border-color: var(--primary);
+  }
+  .person-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .person-info { flex: 1; min-width: 0; }
+  .person-name {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .person-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .sidebar-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* ============ ОСНОВНОЙ КОНТЕНТ ============ */
+  .main-content { padding: 16px; }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .tab {
+    flex: 1;
+    padding: 12px 8px;
+    text-align: center;
+    background: var(--card);
+    border-radius: 14px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border: 2px solid transparent;
+    font-size: 13px;
+    user-select: none;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .tab .icon { font-size: 20px; }
+  .tab.active {
+    color: white;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    transform: translateY(-2px);
+  }
+  .tab:active { transform: scale(0.97); }
+
+  .panel { display: none; animation: fadeIn 0.3s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============ СКАНЕР ============ */
+  #reader {
+    width: 100%;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #000;
+    min-height: 260px;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+  }
+  #reader video { border-radius: 20px; }
+
+  .scan-hint {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin: 10px 0;
+  }
+
+  .scan-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .scan-actions button {
+    padding: 12px 8px;
+    font-size: 13px;
+  }
+
+  .manual-search {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .manual-search input {
+    flex: 1;
+    margin-bottom: 0;
+  }
+  .manual-search button {
+    width: auto;
+    padding: 14px 18px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  /* ============ КАРТОЧКИ ============ */
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+    animation: cardIn 0.4s ease;
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .card h3 {
+    font-size: 16px;
+    margin-bottom: 10px;
+    color: var(--primary-dark);
+    word-break: break-all;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card p { font-size: 14px; color: var(--text); margin: 6px 0; line-height: 1.5; }
+  .card .label {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .card.found {
+    border-left: 5px solid var(--success);
+    background: linear-gradient(to right, var(--success-light) 0%, white 15%);
+  }
+  .card.notfound {
+    border-left: 5px solid var(--danger);
+    background: linear-gradient(to right, var(--danger-light) 0%, white 15%);
+  }
+  .card.info { border-left: 5px solid var(--primary); }
+
+  /* ============ ФОРМА ============ */
+  input, button, select {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 12px;
+    font-size: 15px;
+    border: 1.5px solid var(--border);
+    margin-bottom: 10px;
+    font-family: inherit;
+    background: var(--card);
+    color: var(--text);
+    transition: all 0.15s ease;
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+  input::placeholder { color: #94a3b8; }
+
+  button {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    color: white;
+    border: none;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  button:active { transform: scale(0.97); }
+  button.danger {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+  }
+  button.success {
+    background: linear-gradient(135deg, #16a34a, #22c55e);
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+  }
+  button.orange {
+    background: linear-gradient(135deg, #ea580c, #f97316);
+    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.25);
+  }
+  button.ghost {
+    background: white;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+    box-shadow: none;
+  }
+
+  /* ============ ПУСТО ============ */
+  .empty {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 50px 30px;
+    font-size: 14px;
+    background: var(--card);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+  }
+  .empty .icon { font-size: 44px; display: block; margin-bottom: 12px; opacity: 0.5; }
+
+  /* ============ ШТРИХ-КОД ============ */
+  #barcode-preview {
+    display: none;
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    text-align: center;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-lg);
+    border: 2px dashed var(--primary-light);
+  }
+  #barcode-preview svg { max-width: 100%; height: auto; }
+  #barcode-preview .barcode-num {
+    font-family: 'Courier New', monospace;
+    font-size: 17px;
+    font-weight: bold;
+    margin-top: 12px;
+    letter-spacing: 2px;
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ============ СТАТИСТИКА ============ */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    padding: 14px 8px;
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    text-align: center;
+  }
+  .stat-card .num {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--primary-dark);
+    line-height: 1.2;
+  }
+  .stat-card .lbl {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-top: 4px;
+  }
+
+  /* ============ КНОПКА ГОЛОСА ============ */
+  .voice-btn {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);
+  }
+  .voice-btn.listening {
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.5); }
+    50% { box-shadow: 0 0 0 12px rgba(124, 58, 237, 0); }
+  }
+
+  /* ============ ПОДВАЛ ============ */
+  .footer {
+    text-align: center;
+    padding: 16px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .footer strong { color: var(--primary-dark); }
+</style>
+</head>
+<body>
+
+<!-- ШАПКА -->
+<header class="app-header">
+  <button class="menu-btn" onclick="openSidebar()">☰</button>
+  <div class="header-title">
+    <h1>📦 Сканер посылок</h1>
+    <p id="header-subtitle">Все посылки</p>
+  </div>
+</header>
+
+<!-- БОКОВОЕ МЕНЮ -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h2>👥 Люди</h2>
+    <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+  </div>
+  <div class="sidebar-body" id="sidebar-body"></div>
+  <div class="sidebar-footer">
+    📦 Сканер посылок<br>
+    Автор: <strong>NN</strong>
+  </div>
+</aside>
+
+<!-- ОСНОВНОЙ КОНТЕНТ -->
+<main class="main-content">
+  
+  <!-- ТАБЫ -->
+  <div class="tabs">
+    <div class="tab active" data-tab="scan">
+      <span class="icon">📷</span>
+      Сканер
+    </div>
+    <div class="tab" data-tab="add">
+      <span class="icon">➕</span>
+      Добавить
+    </div>
+    <div class="tab" data-tab="list">
+      <span class="icon">📋</span>
+      Список
+    </div>
+  </div>
+
+  <!-- СКАНЕР -->
+  <div class="panel active" id="panel-scan">
+    <div id="reader"></div>
+    <div class="scan-hint">Наведите камеру на штрих-код посылки</div>
+
+    <div class="scan-actions">
+      <button class="orange" onclick="document.getElementById('scan-photo-input').click()">
+        📁 Из галереи
+      </button>
+      <button class="voice-btn" id="voice-btn" onclick="startVoiceSearch()">
+        🎤 Голосом
+      </button>
+    </div>
+    <input type="file" id="scan-photo-input" accept="image/*" style="display:none;" onchange="scanPhoto(event, 'scan-result')">
+
+    <div class="divider">или введите вручную</div>
+
+    <div class="manual-search">
+      <input id="manual-input" placeholder="Трек-номер..." autocomplete="off">
+      <button onclick="manualSearch()">🔍</button>
+    </div>
+
+    <div id="scan-result" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- ДОБАВИТЬ -->
+  <div class="panel" id="panel-add">
+    <div class="card">
+      <h3>📁 Из галереи</h3>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+        Загрузите фото штрих-кода — трек-номер определится автоматически
+      </p>
+      <button onclick="document.getElementById('photo-input').click()" class="orange">
+        📷 Выбрать фото
+      </button>
+      <input type="file" id="photo-input" accept="image/*" style="display:none;" onchange="scanPhoto(event, 'photo-status')">
+      <div id="photo-status"></div>
+    </div>
+
+    <div class="divider">или вручную</div>
+
+    <input id="in-track" placeholder="Трек-номер (RU123456789)" autocomplete="off">
+    <input id="in-person" placeholder="Кто заказал (Вика, Оля...)" autocomplete="off">
+    <input id="in-weight" placeholder="Вес в кг (2.5)" type="number" step="0.01" inputmode="decimal">
+    <input id="in-desc" placeholder="Что в посылке" autocomplete="off">
+    
+    <button onclick="generateBarcode()" class="success">📊 Сгенерировать штрих-код</button>
+    
+    <div id="barcode-preview">
+      <svg id="barcode-svg"></svg>
+      <p class="barcode-num" id="barcode-text"></p>
+      <button onclick="saveBarcodeImage()" class="ghost" style="margin-top: 12px;">💾 Скачать картинку</button>
+    </div>
+
+    <button onclick="savePackage()" style="margin-top: 8px;">💾 Сохранить в базу</button>
+  </div>
+
+  <!-- СПИСОК -->
+  <div class="panel" id="panel-list">
+    <div class="stats" id="stats"></div>
+    <div id="list"></div>
+  </div>
+
+</main>
+
+<!-- ПОДВАЛ -->
+<div class="footer">Автор: <strong>NN</strong></div>
+
+<script>
+// ============ ХРАНИЛИЩЕ ============
+const STORAGE_KEY = 'packages_db_v2';
+let currentPersonFilter = null; // null = все, иначе имя человека
+
+function loadDB() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+function saveDB(db) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+}
+
+// ============ ТАБЫ ============
+let scannerRunning = false;
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+
+    if (tab.dataset.tab === 'scan') {
+      startScanner();
+    } else {
+      stopScanner();
+    }
+    if (tab.dataset.tab === 'list') {
+      renderList();
+    }
+  };
+});
+
+// ============ БОКОВОЕ МЕНЮ ============
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  renderSidebar();
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+function renderSidebar() {
+  const db = loadDB();
+  const body = document.getElementById('sidebar-body');
+
+  // Группируем по людям
+  const persons = {};
+  Object.keys(db).forEach(track => {
+    const p = db[track];
+    const name = (p.person || 'Без имени').trim();
+    if (!persons[name]) persons[name] = { count: 0, weight: 0 };
+    persons[name].count++;
+    persons[name].weight += parseFloat(p.weight) || 0;
+  });
+
+  const names = Object.keys(persons).sort();
+
+  let html = `
+    <div class="person-item ${currentPersonFilter === null ? 'active' : ''}" onclick="filterByPerson(null)">
+      <div class="person-avatar" style="background: linear-gradient(135deg, #64748b, #475569);">📦</div>
+      <div class="person-info">
+        <div class="person-name">Все посылки</div>
+        <div class="person-meta">${Object.keys(db).length} шт · ${Object.values(db).reduce((s,p) => s + (parseFloat(p.weight)||0), 0).toFixed(1)} кг</div>
+      </div>
+    </div>
+  `;
+
+  if (names.length === 0) {
+    html += '<div class="sidebar-empty">Пока никого нет.<br>Добавьте посылку с именем.</div>';
+  } else {
+    names.forEach(name => {
+      const info = persons[name];
+      const initial = name.charAt(0).toUpperCase();
+      const isActive = currentPersonFilter === name;
+      html += `
+        <div class="person-item ${isActive ? 'active' : ''}" onclick="filterByPerson('${escapeAttr(name)}')">
+          <div class="person-avatar">${escapeHtml(initial)}</div>
+          <div class="person-info">
+            <div class="person-name">${escapeHtml(name)}</div>
+            <div class="person-meta">${info.count} шт · ${info.weight.toFixed(1)} кг</div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  body.innerHTML = html;
+}
+
+function filterByPerson(name) {
+  currentPersonFilter = name;
+  closeSidebar();
+  // Переключаемся на вкладку список
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.tab[data-tab="list"]').classList.add('active');
+  document.getElementById('panel-list').classList.add('active');
+  document.getElementById('header-subtitle').textContent = name ? `👤 ${name}` : 'Все посылки';
+  renderList();
+}
+
+// ============ ГОЛОСОВОЙ ПОИСК ============
+function startVoiceSearch() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert('Ваш браузер не поддерживает голосовой ввод. Попробуйте Chrome или Safari.');
+    return;
+  }
+
+  const btn = document.getElementById('voice-btn');
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  btn.classList.add('listening');
+  btn.textContent = '🎤 Говорите...';
+
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript.trim();
+    document.getElementById('manual-input').value = text;
+    btn.classList.remove('listening');
+    btn.textContent = '🎤 Голосом';
+    manualSearch();
+  };
+
+  recognition.onerror = () => {
+    btn.classList.remove('listening');
+    btn.textContent = '🎤 Голосом';
+  };
+
+  recognition.onend = () => {
+    btn.classList.remove('listening');
+    btn.textContent = '🎤 Голосом';
+  };
+
+  recognition.start();
+}
+
+// ============ РУЧНОЙ ПОИСК ============
+function manualSearch() {
+  const input = document.getElementById('manual-input');
+  const code = input.value.trim().toUpperCase();
+  if (!code) { alert('Введите трек-номер'); return; }
+
+  const db = loadDB();
+  const p = db[code];
+  const el = document.getElementById('scan-result');
+
+  if (p) {
+    el.innerHTML = `<div class="card found">
+      <h3>✅ ${escapeHtml(code)}</h3>
+      <p><span class="label">Заказчик</span>${escapeHtml(p.person || '—')}</p>
+      <p><span class="label">Вес</span>${escapeHtml(p.weight || '—')} кг</p>
+      <p><span class="label">Содержимое</span>${escapeHtml(p.desc || '—')}</p>
+    </div>`;
+    if (navigator.vibrate) navigator.vibrate(120);
+  } else {
+    el.innerHTML = `<div class="card notfound">
+      <h3>❓ ${escapeHtml(code)}</h3>
+      <p>Такой трек-номер не найден в базе.</p>
+      <button class="success" style="margin-top:12px;"
+        onclick="prefillAdd('${escapeAttr(code)}')">➕ Добавить эту посылку</button>
+    </div>`;
+  }
+  input.value = '';
+}
+
+// ============ РАСПОЗНАВАНИЕ С ФОТО ============
+function scanPhoto(event, targetId) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById(targetId);
+  statusEl.innerHTML = '<div class="card info" style="margin-top:12px;">⏳ Распознаю штрих-код...</div>';
+
+  if (!document.getElementById('photo-temp')) {
+    const div = document.createElement('div');
+    div.id = 'photo-temp';
+    div.style.display = 'none';
+    document.body.appendChild(div);
+  }
+
+  const tempScanner = new Html5Qrcode("photo-temp");
+
+  tempScanner.scanFile(file, true)
+    .then(decodedText => {
+      const code = decodedText.toUpperCase();
+
+      if (targetId === 'scan-result') {
+        // В режиме сканера — ищем в базе
+        const db = loadDB();
+        const p = db[code];
+        if (p) {
+          statusEl.innerHTML = `<div class="card found">
+            <h3>✅ ${escapeHtml(code)}</h3>
+            <p><span class="label">Заказчик</span>${escapeHtml(p.person || '—')}</p>
+            <p><span class="label">Вес</span>${escapeHtml(p.weight || '—')} кг</p>
+            <p><span class="label">Содержимое</span>${escapeHtml(p.desc || '—')}</p>
+          </div>`;
+        } else {
+          statusEl.innerHTML = `<div class="card notfound">
+            <h3>❓ ${escapeHtml(code)}</h3>
+            <p>Не найдено в базе.</p>
+            <button class="success" style="margin-top:12px;"
+              onclick="prefillAdd('${escapeAttr(code)}')">➕ Добавить</button>
+          </div>`;
+        }
+      } else {
+        // В режиме добавления — подставляем в поле
+        document.getElementById('in-track').value = code;
+        statusEl.innerHTML = `<div class="card found" style="margin-top:12px;">
+          <h3>✅ Распознано</h3>
+          <p style="font-family:monospace;font-size:16px;font-weight:bold;">${escapeHtml(code)}</p>
+        </div>`;
+      }
+      event.target.value = '';
+      tempScanner.clear();
+    })
+    .catch(err => {
+      statusEl.innerHTML = `<div class="card notfound" style="margin-top:12px;">
+        <h3>❌ Не удалось</h3>
+        <p>Штрих-код не найден. Проверьте качество фото.</p>
+      </div>`;
+      event.target.value = '';
+      tempScanner.clear();
+    });
+}
+
+// ============ ГЕНЕРАЦИЯ ШТРИХ-КОДА ============
+function generateBarcode() {
+  const track = document.getElementById('in-track').value.trim().toUpperCase();
+  if (!track) { alert('Сначала введите трек-номер!'); return; }
+
+  const preview = document.getElementById('barcode-preview');
+  const svg = document.getElementById('barcode-svg');
+  const textEl = document.getElementById('barcode-text');
+
+  try {
+    JsBarcode(svg, track, {
+      format: "CODE128", width: 2, height: 80,
+      displayValue: true, fontSize: 16, margin: 10
+    });
+    textEl.textContent = track;
+    preview.style.display = 'block';
+    preview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) {
+    alert('Ошибка: недопустимые символы. Используйте латиницу и цифры.');
+  }
+}
+
+function saveBarcodeImage() {
+  const svg = document.getElementById('barcode-svg');
+  const track = document.getElementById('in-track').value.trim().toUpperCase();
+  const svgData = new XMLSerializer().serializeToString(svg);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  canvas.width = 800; canvas.height = 300;
+  const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(svgBlob);
+  img.onload = function() {
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 50, 50, 700, 150);
+    ctx.fillStyle = 'black';
+    ctx.font = 'bold 30px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(track, canvas.width / 2, 250);
+    const link = document.createElement('a');
+    link.download = 'barcode_' + track + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+// ============ СОХРАНЕНИЕ ============
+function savePackage() {
+  const track = document.getElementById('in-track').value.trim().toUpperCase();
+  const person = document.getElementById('in-person').value.trim();
+  const weight = document.getElementById('in-weight').value.trim();
+  const desc = document.getElementById('in-desc').value.trim();
+
+  if (!track) { alert('Введите или отсканируйте трек-номер'); return; }
+
+  const db = loadDB();
+  db[track] = { person, weight, desc, addedAt: Date.now() };
+  saveDB(db);
+
+  document.getElementById('in-track').value = '';
+  document.getElementById('in-person').value = '';
+  document.getElementById('in-weight').value = '';
+  document.getElementById('in-desc').value = '';
+  document.getElementById('barcode-preview').style.display = 'none';
+  document.getElementById('photo-status').innerHTML = '';
+
+  alert('✅ Сохранено: ' + track);
+}
+
+// ============ СПИСОК + СТАТИСТИКА ============
+function renderList() {
+  const db = loadDB();
+  let keys = Object.keys(db);
+  const el = document.getElementById('list');
+  const statsEl = document.getElementById('stats');
+
+  // Фильтрация по человеку
+  if (currentPersonFilter !== null) {
+    keys = keys.filter(k => (db[k].person || 'Без имени').trim() === currentPersonFilter);
+  }
+
+  // Статистика
+  const total = keys.length;
+  const totalWeight = keys.reduce((sum, k) => sum + (parseFloat(db[k].weight) || 0), 0);
+  const personsCount = currentPersonFilter === null
+    ? new Set(Object.values(db).map(p => (p.person || 'Без имени').trim())).size
+    : 1;
+
+  statsEl.innerHTML = `
+    <div class="stat-card">
+      <div class="num">${total}</div>
+      <div class="lbl">Посылок</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">${totalWeight.toFixed(1)}</div>
+      <div class="lbl">Вес (кг)</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">${personsCount}</div>
+      <div class="lbl">${currentPersonFilter === null ? 'Людей' : 'Человек'}</div>
+    </div>
+  `;
+
+  if (!keys.length) {
+    const msg = currentPersonFilter
+      ? `У «${escapeHtml(currentPersonFilter)}» пока нет посылок`
+      : 'Пока нет посылок<br>Добавьте первую через вкладку ➕';
+    el.innerHTML = `<div class="empty"><span class="icon">📭</span>${msg}</div>`;
+    return;
+  }
+
+  el.innerHTML = keys.map(k => {
+    const p = db[k];
+    return `<div class="card">
+      <h3>📦 ${escapeHtml(k)}</h3>
+      <p><span class="label">Заказчик</span>${escapeHtml(p.person || '—')}</p>
+      <p><span class="label">Вес</span>${escapeHtml(p.weight || '—')} кг</p>
+      <p><span class="label">Содержимое</span>${escapeHtml(p.desc || '—')}</p>
+      <button class="danger" style="margin-top:8px;" onclick="del('${escapeAttr(k)}')">🗑 Удалить</button>
+    </div>`;
+  }).join('');
+}
+
+function del(key) {
+  if (!confirm('Удалить ' + key + '?')) return;
+  const db = loadDB();
+  delete db[key];
+  saveDB(db);
+  renderList();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function escapeAttr(s) {
+  return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// ============ СКАНЕР ============
+let scanner = null;
+let lastScan = { code: '', time: 0 };
+
+function startScanner() {
+  if (scannerRunning) return;
+  const readerEl = document.getElementById('reader');
+  if (!readerEl) return;
+
+  scanner = new Html5Qrcode("reader");
+  scannerRunning = true;
+
+  scanner.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: { width: 280, height: 280 },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF
+      ]
+    },
+    onScan,
+    () => {}
+  ).catch(err => {
+    scannerRunning = false;
+    document.getElementById('scan-result').innerHTML =
+      `<div class="card notfound">
+        <h3>⚠️ Камера недоступна</h3>
+        <p>${escapeHtml(String(err))}</p>
+      </div>`;
+  });
+}
+
+function stopScanner() {
+  if (!scanner || !scannerRunning) return;
+  scannerRunning = false;
+  scanner.stop().then(() => { scanner.clear(); scanner = null; }).catch(() => { scanner = null; });
+}
+
+function onScan(text) {
+  const now = Date.now();
+  if (text === lastScan.code && now - lastScan.time < 2500) return;
+  lastScan = { code: text, time: now };
+
+  const db = loadDB();
+  const key = text.toUpperCase().trim();
+  const p = db[key];
+  const el = document.getElementById('scan-result');
+
+  if (p) {
+    el.innerHTML = `<div class="card found">
+      <h3>✅ ${escapeHtml(key)}</h3>
+      <p><span class="label">Заказчик</span>${escapeHtml(p.person || '—')}</p>
+      <p><span class="label">Вес</span>${escapeHtml(p.weight || '—')} кг</p>
+      <p><span class="label">Содержимое</span>${escapeHtml(p.desc || '—')}</p>
+    </div>`;
+    if (navigator.vibrate) navigator.vibrate(120);
+  } else {
+    el.innerHTML = `<div class="card notfound">
+      <h3>❓ ${escapeHtml(key)}</h3>
+      <p>Такой трек-номер не найден в базе.</p>
+      <button class="success" style="margin-top:12px;"
+        onclick="prefillAdd('${escapeAttr(key)}')">➕ Добавить эту посылку</button>
+    </div>`;
+    if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
+  }
+}
+
+function prefillAdd(track) {
+  document.getElementById('in-track').value = track;
+  document.querySelector('.tab[data-tab="add"]').click();
+}
+
+// ============ СТАРТ ============
+window.addEventListener('load', () => {
+  renderSidebar();
+});
+</script>
+
+</body>
+</html>
